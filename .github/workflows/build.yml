@@ -1,0 +1,101 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: LLVM ${{ matrix.llvm }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM ${{ matrix.llvm }}
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          wget -qO /tmp/llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+          sudo cp /tmp/llvm.asc /usr/share/keyrings/llvm.asc
+
+          # Released versions live in llvm-toolchain-<codename>-<N>, the
+          # in-development one in the unsuffixed repository.
+          for suffix in "-${{ matrix.llvm }}" ""; do
+            url="http://apt.llvm.org/${VERSION_CODENAME}/dists/llvm-toolchain-${VERSION_CODENAME}${suffix}/Release"
+            if wget -q --spider "$url"; then
+              echo "deb [signed-by=/usr/share/keyrings/llvm.asc] http://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}${suffix} main" \
+                | sudo tee /etc/apt/sources.list.d/llvm.list
+              break
+            fi
+          done
+          test -s /etc/apt/sources.list.d/llvm.list \
+            || { echo "no apt.llvm.org repo for ${VERSION_CODENAME} / LLVM ${{ matrix.llvm }}"; exit 1; }
+
+          sudo apt-get update
+          # libclang-dev and libmlir-dev are needed because FlangTargets.cmake
+          # references their imported targets.
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            llvm-${{ matrix.llvm }}-dev \
+            libclang-${{ matrix.llvm }}-dev \
+            libmlir-${{ matrix.llvm }}-dev \
+            libflang-${{ matrix.llvm }}-dev \
+            flang-${{ matrix.llvm }} \
+            clang-${{ matrix.llvm }} \
+            zlib1g-dev libzstd-dev libcurl4-openssl-dev libedit-dev \
+            libxml2-dev libffi-dev
+
+      - name: Stub unshipped MLIR tool binaries
+        # The LLVM packages export imported targets for MLIR tool binaries they
+        # do not ship, and CMake rejects the export file when an imported
+        # executable is missing.  flang-tidy links libraries only and never
+        # runs these generators, so stub the absent ones.
+        #
+        # Export files reference tools through ${_IMPORT_PREFIX} rather than as
+        # absolute paths, so match on the /bin/<name> tail of any quoted path.
+        run: |
+          set -euo pipefail
+          root=/usr/lib/llvm-${{ matrix.llvm }}
+          for f in "$root"/lib/cmake/*/*.cmake; do
+            [ -f "$f" ] || continue
+            grep -hoE '"[^"]*/bin/[A-Za-z0-9_.+-]+"' "$f" || true
+          done | sed 's|.*/bin/||; s|"||' | sort -u | while read -r name; do
+            tool="$root/bin/$name"
+            if [ ! -e "$tool" ]; then
+              printf '#!/bin/sh\necho "$0: stub, not shipped by the LLVM packages" >&2\nexit 1\n' \
+                | sudo tee "$tool" >/dev/null
+              sudo chmod +x "$tool"
+              echo "stubbed $tool"
+            fi
+          done
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-${{ matrix.llvm }} \
+            -DCMAKE_CXX_COMPILER=clang++-${{ matrix.llvm }} \
+            -DLLVM_ROOT=/usr/lib/llvm-${{ matrix.llvm }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Smoke test
+        # A check that needs no module files must fire on known-bad input.
+        run: |
+          set -euo pipefail
+          printf 'subroutine s\n  x = 1.0\nend subroutine\n' > smoke.f90
+          ./build/flang-tidy -checks=bugprone-implicit-declaration smoke.f90 2>&1 | tee out
+          grep -q "warning:" out
+
+      - name: Check module registration
+        # Fails if a check module did not get linked in.  Takes a source file
+        # because a positional argument is required even to dump the config.
+        run: ./build/flang-tidy -dump-config smoke.f90
