@@ -1,4 +1,4 @@
-! RUN: %flang-tidy %s bugprone-expm1 %t
+! RUN: %check_flang_tidy %s bugprone-expm1 %t
 subroutine test_nonconstant(x)
   real, intent(in) :: x
   real :: r1, r2, r3
