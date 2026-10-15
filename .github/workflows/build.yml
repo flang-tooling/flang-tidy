@@ -99,3 +99,10 @@ jobs:
         # Fails if a check module did not get linked in.  Takes a source file
         # because a positional argument is required even to dump the config.
         run: ./build/flang-tidy -dump-config smoke.f90
+
+      - name: Lit tests
+        run: |
+          pip install --quiet lit
+          lit -v test/ \
+            --param flang_tidy_dir=$PWD/build \
+            --param llvm_tools_dir=/usr/lib/llvm-${{ matrix.llvm }}/bin

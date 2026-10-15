@@ -24,3 +24,6 @@ compile_commands.json
 tmp.txt
 *.orig
 *.rej
+
+# lit scratch
+test/**/Output/
