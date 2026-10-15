@@ -13,7 +13,7 @@ import sys
 import lit.formats
 
 config.name = "flang-tidy"
-config.test_format = lit.formats.ShTest(execute_external=True)
+config.test_format = lit.formats.ShTest()
 config.suffixes = [".f", ".f90", ".f95", ".f03", ".f08", ".mod", ".test"]
 config.excludes = ["Inputs"]
 config.test_source_root = os.path.dirname(__file__)
