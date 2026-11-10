@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>flang-tidy - bugprone-format-mismatch &#8212; flang-tidy  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="bugprone-implicit-declaration" href="implicit-declaration.html" />
+    <link rel="prev" title="bugprone-contiguous-array" href="contiguous-array.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="bugprone-format-mismatch">
+<h1>bugprone-format-mismatch<a class="headerlink" href="#bugprone-format-mismatch" title="Link to this heading">¶</a></h1>
+<p>Compares the data edit descriptors of a format specification against the types
+and the number of items in the corresponding I/O list.</p>
+<p>Fortran does not check formats against I/O lists at compile time, and applying
+an edit descriptor to an item of the wrong type is a runtime error rather than
+a compilation error. This check performs that comparison statically.</p>
+<section id="type-mismatches">
+<h2>Type mismatches<a class="headerlink" href="#type-mismatches" title="Link to this heading">¶</a></h2>
+<p>A data edit descriptor may only be applied to an item of a compatible type:
+<code class="docutils literal notranslate"><span class="pre">I</span></code> to integers, <code class="docutils literal notranslate"><span class="pre">F</span></code>, <code class="docutils literal notranslate"><span class="pre">E</span></code>, <code class="docutils literal notranslate"><span class="pre">EN</span></code>, <code class="docutils literal notranslate"><span class="pre">ES</span></code>, <code class="docutils literal notranslate"><span class="pre">EX</span></code> and <code class="docutils literal notranslate"><span class="pre">D</span></code> to reals and
+complexes, <code class="docutils literal notranslate"><span class="pre">L</span></code> to logicals, <code class="docutils literal notranslate"><span class="pre">A</span></code> to characters, and <code class="docutils literal notranslate"><span class="pre">DT</span></code> to derived types.
+<code class="docutils literal notranslate"><span class="pre">G</span></code> accepts any intrinsic type, and <code class="docutils literal notranslate"><span class="pre">B</span></code>, <code class="docutils literal notranslate"><span class="pre">O</span></code> and <code class="docutils literal notranslate"><span class="pre">Z</span></code> accept any
+intrinsic type as a bit pattern; neither is ever reported.</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">r</span>
+<span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+
+<span class="c">! Warning - the 'I' descriptor is applied to a real</span>
+<span class="k">write</span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">'(I5)'</span><span class="p">)</span><span class="w"> </span><span class="n">r</span>
+
+<span class="c">! Warning - format reversion applies 'A' a second time, to an integer</span>
+<span class="k">write</span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">'(A)'</span><span class="p">)</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">x</span>
+</pre></div>
+</div>
+</section>
+<section id="counts">
+<h2>Counts<a class="headerlink" href="#counts" title="Link to this heading">¶</a></h2>
+<p>The check also reports when the number of data edit descriptors differs from
+the number of effective list items. Neither direction is an error in Fortran:
+format control simply terminates at the first data edit descriptor that has no
+corresponding item, and reverts to reuse the format when items remain. Both
+situations are nevertheless usually unintended.</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="c">! Warning - three descriptors, two items; the trailing 'A' is never reached</span>
+<span class="k">write</span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">'(A, I5, A)'</span><span class="p">)</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">x</span>
+
+<span class="c">! No warning</span>
+<span class="k">write</span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">'(A, I5)'</span><span class="p">)</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">x</span>
+</pre></div>
+</div>
+<p>A complex item consumes two data edit descriptors, and an array item consumes
+one per element.</p>
+</section>
+<section id="limitations">
+<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
+<p>Only formats whose text is known at compile time are analysed: character
+literals, named character constants, and <code class="docutils literal notranslate"><span class="pre">FORMAT</span></code> statements referenced by
+label. A format built at run time in a character variable is skipped.</p>
+<p>When the I/O list contains an implied-<code class="docutils literal notranslate"><span class="pre">DO</span></code>, or the format contains an
+unlimited format item (<code class="docutils literal notranslate"><span class="pre">*(...)</span></code>), the number of items cannot be determined.
+The check then falls back to reporting only those items whose type no
+descriptor in the format accepts, and makes no claim about counts.</p>
+<p>Derived-type items are skipped, since their transfer goes through defined I/O.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">flang-tidy</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../list.html">The list of flang-tidy checks</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../list.html">Flang-Tidy Checks</a><ul>
+      <li>Previous: <a href="contiguous-array.html" title="previous chapter">bugprone-contiguous-array</a></li>
+      <li>Next: <a href="implicit-declaration.html" title="next chapter">bugprone-implicit-declaration</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.2.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/checks/bugprone/format-mismatch.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

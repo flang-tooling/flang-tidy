@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>flang-tidy - performance-pointer-alias &#8212; flang-tidy  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="performance-possible-temporary" href="possible-temporary.html" />
+    <link rel="prev" title="openmp-accumulator-race" href="../openmp/accumulator-race.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="performance-pointer-alias">
+<h1>performance-pointer-alias<a class="headerlink" href="#performance-pointer-alias" title="Link to this heading">¶</a></h1>
+<p>Reports loops in which one array pointer is assigned while a different array
+pointer is read.</p>
+<p>Fortran gives strong non-aliasing guarantees for ordinary dummy arguments, but
+not for pointers: two pointers may designate overlapping storage, and nothing
+at the point of use establishes that they do not. A loop that writes through
+one pointer and reads through another therefore carries a potential dependence,
+and the compiler cannot assume the iterations are independent.</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">)</span>
+<span class="w">  </span><span class="kt">real</span><span class="p">,</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">(:),</span><span class="w"> </span><span class="n">b</span><span class="p">(:)</span>
+<span class="w">  </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span>
+<span class="w">  </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="w">    </span><span class="n">a</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w">   </span><span class="c">! warning: 'a' and 'b' may alias</span>
+<span class="w">  </span><span class="k">end do</span>
+<span class="k">end subroutine</span>
+</pre></div>
+</div>
+<p>Reading and writing the <em>same</em> pointer is an ordinary loop-carried dependence
+and is not reported; only distinct pointers are.</p>
+<p>Ways to remove the dependence, in rough order of preference:</p>
+<ul class="simple">
+<li><p>Drop the <code class="docutils literal notranslate"><span class="pre">POINTER</span></code> attribute where pointer semantics are not needed. A
+pointer actual argument may be passed to a non-pointer dummy, so this is
+usually compatible with existing callers, and it recovers both the
+non-aliasing and the contiguity guarantee.</p></li>
+<li><p>Copy through local arrays inside the procedure.</p></li>
+<li><p>Assert independence explicitly, for example with <code class="docutils literal notranslate"><span class="pre">DO</span> <span class="pre">CONCURRENT</span></code> or an
+OpenMP <code class="docutils literal notranslate"><span class="pre">simd</span></code> directive.</p></li>
+</ul>
+<section id="note">
+<h2>Note<a class="headerlink" href="#note" title="Link to this heading">¶</a></h2>
+<p>This check reports a property of the source: that the language permits the two
+pointers to overlap. It makes no prediction about what any particular compiler
+does with the loop. A compiler is free to version the loop with a runtime
+overlap test and vectorise the disjoint copy, at the cost of the test itself
+and of the additional code.</p>
+<p><code class="docutils literal notranslate"><span class="pre">DO</span> <span class="pre">CONCURRENT</span></code> loops are not reported, since they already assert that the
+iterations are independent.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">flang-tidy</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../list.html">The list of flang-tidy checks</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../list.html">Flang-Tidy Checks</a><ul>
+      <li>Previous: <a href="../openmp/accumulator-race.html" title="previous chapter">openmp-accumulator-race</a></li>
+      <li>Next: <a href="possible-temporary.html" title="next chapter">performance-possible-temporary</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.2.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/checks/performance/pointer-alias.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
