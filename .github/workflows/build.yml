@@ -3,8 +3,12 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['**']
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -16,7 +20,7 @@ jobs:
         llvm: [23]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install LLVM ${{ matrix.llvm }}
         run: |
@@ -106,3 +110,37 @@ jobs:
           lit -v test/ \
             --param flang_tidy_dir=$PWD/build \
             --param llvm_tools_dir=/usr/lib/llvm-${{ matrix.llvm }}/bin
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: .github/requirements.txt
+
+      - name: Install Python packages
+        run: pip install -r .github/requirements.txt
+
+      - name: Build documentation
+        run: |
+          sphinx-build -C -W --keep-going -n -b html \
+            -D project=flang-tidy \
+            -D extensions=sphinx.ext.githubpages \
+            -d build/doctrees \
+            docs build/html
+
+      - name: Deploy pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: build/html
+          single-commit: true
+          dry-run: ${{ !(github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
